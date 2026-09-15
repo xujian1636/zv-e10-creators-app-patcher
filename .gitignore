@@ -1,0 +1,16 @@
+# Never commit Sony binaries or build outputs
+*.apk
+*.xapk
+*.apks
+out/
+# Signing material
+*.jks
+*.keystore
+*.pass
+# Logs may contain device identifiers
+logs/
+*.log
+.DS_Store
+__pycache__/
+# Local tool state
+.claude/
