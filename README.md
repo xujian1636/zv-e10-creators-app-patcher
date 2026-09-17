@@ -1,8 +1,8 @@
 # ZV-E10 × Creators' App
 
-Patches for Sony's **Creators' App** for Android (3.5.0) so it can remote-control a **ZV-E10 over USB**: live view,
-photo capture with automatic transfer to the phone, movie recording, exposure controls. Includes a write-up of why
-the app cannot use the camera and what was changed.
+Patches for Sony's **Creators' App** for Android (3.5.0) that add support for the original **ZV-E10** over USB and
+Wi-Fi: live view and remote control, still and movie shooting, automatic copy of captured photos, transfer of images
+sent from the camera, and browsing the memory card from the phone.
 
 [中文说明](README.zh-CN.md)
 
@@ -11,39 +11,54 @@ the app cannot use the camera and what was changed.
 
 ## Compatibility
 
-Creators' App's supported camera list includes the ZV-E10 II but not the original ZV-E10; every feature below was
-adapted by this project. Tested with the patched app:
+Creators' App's supported camera list includes the ZV-E10 II but not the original ZV-E10; everything below was
+adapted by this project and tested with the patched app.
 
-| Feature | Status |
-|---|---|
-| USB connection | ✅ |
-| Wi-Fi connection | ❌ |
-| Live view | ✅ |
-| Photo capture | ✅ hold the shutter button; photos are copied to the phone |
-| Movie recording | ✅ |
-| Exposure mode, exposure compensation, ISO | ✅ |
-| Import from the memory card | ❌ the camera does not expose its card; the button is hidden ([why](docs/en/04-status.md)) |
+The camera provides two Wi-Fi services with different capabilities: *PC Remote Function* for remote control, and
+*Smartphone Connect Function* / *Send to Smartphone Func.* for file transfer.
 
-Tested: app 3.5.0, ZV-E10 firmware 2.03, Android 16. Camera setting: *PC Remote: On*, connection method *USB*.
+| Feature | USB<br>(PC Remote) | Wi-Fi<br>(PC Remote) | Wi-Fi<br>(Smartphone Connect) |
+|---|---|---|---|
+| Connection | ✅ | ✅ | ✅ |
+| Live view, exposure controls | ✅ | ✅ | ✅ |
+| Photo capture | ✅ | ✅ | ✅ |
+| Photos copied to the phone automatically | ✅ | ✅ | ✅ |
+| Movie recording | ✅ | ✅ | ✅ |
+| Camera side: Send to Smartphone | ❌ | ❌ | ✅ |
+| Phone side: browse the card and import | ❌ | ❌ | ✅ |
 
-## Why the unpatched app fails
+- **Connection methods.** PC Remote supports USB, Wi-Fi Direct and an access point (the camera joins your router).
+  Smartphone Connect supports Wi-Fi Direct only.
+- **Transfer.** In PC Remote mode the camera exposes no storage and refuses to send images, so both transfer rows
+  are unavailable there. Movies are never copied automatically after recording: the save-destination setting covers
+  still images only.
 
-1. The app checks the model against its **supported camera list** and rejects the ZV-E10.
-2. On plug-in the app opens a **contents transfer** session, which the ZV-E10 does not support in PC Remote mode →
-   endless spinner.
-3. Whenever the Cameras tab is shown it **switches the session to contents transfer** → Remote Shooting says
-   *"Could not connect to your camera via USB."*
-4. After the session opens the app sends **`SDIO_GetDeviceLog`**, which the ZV-E10 does not implement; the error
-   breaks the whole session → spinning live view, *"Could not perform."*
-5. After a visit to the **Home** tab the app reconnects in contents transfer mode again.
+Tested: app 3.5.0, ZV-E10 firmware 2.03, Android 16.
 
-Patches P1–P5 fix these in order; P6 hides the Import button, which cannot work. Details: [docs](#documentation).
+## Why the unpatched app cannot be used
+
+1. Over USB the app checks the model against its **supported camera list** and rejects the ZV-E10 → *"Connection
+   failed"*. → **P1**
+2. On plug-in it opens a **contents-transfer** session, which the camera refuses in PC Remote mode → endless
+   spinner. → **P2**
+3. Every time the Cameras tab appears it **reopens the session for contents transfer**, so Remote Shooting says
+   *"Could not connect to your camera via USB."* → **P3**
+4. Right after the session opens it asks for the camera's **service log**, an operation the ZV-E10 does not
+   implement; the error poisons the session → spinning live view, *"Could not perform."* → **P4**, **P7**
+5. Leaving the Cameras tab and coming back reconnects in contents-transfer mode again. → **P5**
+6. Over Wi-Fi the camera is **never listed**: the app requires protocol version 3.01 and a media-server flag that
+   the ZV-E10 does not report. → **P7**
+7. The same version check blocks **Import** and the automatic copy of images the camera sends. → **P8**
+8. Remote Shooting can open with a **black screen** when live view is already running on the camera (for example
+   after another app used it). → **P9**
+
+Details: [problems and patches](docs/en/02-patches.md).
 
 ## Documentation
 
 1. [How the app talks to the camera](docs/en/01-how-it-works.md)
 2. [Problems and patches](docs/en/02-patches.md)
-3. [Debugging workflow](docs/en/03-debugging.md) — injected PTP tracing, wireless adb, other apps taking the USB device
+3. [Debugging workflow](docs/en/03-debugging.md)
 4. [Status and limitations](docs/en/04-status.md)
 
 ## Patching (macOS)
@@ -67,20 +82,39 @@ Uninstall the original app first (different signature), then install the XAPK wi
 
 ## Use
 
-1. On first launch, choose **Hong Kong** as the region (with mainland China the app requires a Creators' Cloud
-   sign-in before it connects to a camera).
-2. Set the camera to *PC Remote: On*, connection method *USB*, and connect the cable.
-3. Allow USB access for Creators' App. The **Cameras** tab shows the ZV-E10 with a **Remote Shooting** button.
-4. To take a photo, **hold** the shutter button until the camera has focused, then release.
-5. While the camera is connected, tap **Cancel** if another app (for example the Gallery) asks for access to it.
+On first launch, choose **Hong Kong** as the region: with mainland China the app requires a Creators' Cloud sign-in
+before it connects to a camera. Camera menu names below follow the camera's English menus.
 
-**Bug reports:** use the debug build, run `adb logcat -v time > zvpatch.log` while reproducing, and attach the
-output of `grep -a ZVPATCH zvpatch.log`.
+**USB** — *Network → PC Remote Function*: *PC Remote: On*, *PC Remote Cnct Method: USB*. Connect the cable and allow
+USB access for Creators' App. The **Cameras** tab shows the camera with a **Remote Shooting** button.
+
+**Wi-Fi, remote control** — *PC Remote Function*: *PC Remote: On*, *PC Remote Cnct Method: Wi-Fi Access Point* (the
+camera joins your router; *Wi-Fi Settings* sets it up) or *Wi-Fi Direct* (the camera opens a hotspot, connect the
+phone to it). In the app: **Cameras → gear icon → Connect only via Wi-Fi**, then pick the camera. Access-point mode
+asks for a one-time pairing on the camera the first time.
+
+**Wi-Fi, transfer** — turn *PC Remote* **off** first; the camera refuses to send images while it is on. Then either
+*Network → Send to Smartphone Func. → Send to Smartphone* (pick the images on the camera) or *Network → Smartphone
+Connect Function → Connection*. Connect the phone to the `DIRECT-…` hotspot the camera shows, then use
+**Connect only via Wi-Fi** in the app.
+
+- Images you selected on the camera arrive by themselves once the app has connected; confirm the notice dialog.
+- With nothing selected on the camera, **Import** browses the whole card and downloads what you pick.
+- What arrives (original or reduced size, RAW+JPEG or JPEG only) follows the camera's own settings under *Send to
+  Smartphone Func.* and *Smartphone Connect Function → Remote Shoot Setting*.
+
+**Notes**
+
+- Set *Still Img. Save Dest.* to *PC+Camera* (PC Remote) or *Phone+Camera* (Remote Shoot Setting) so photos also
+  stay on the memory card.
+- Leaving Remote Shooting under Smartphone Connect takes a few seconds: the app reopens the session so the camera
+  can send images again.
+- While the camera is connected over USB, tap **Cancel** if another app (for example the Gallery) asks for access.
 
 ## Disclaimer
 
 Sony, ZV-E10 and Creators' App are trademarks of Sony Group Corporation, used only to describe compatibility.
-The patches change the camera model check, USB session handling and one button only; they do not touch accounts,
+The patches change the camera model check, the session handling and one button only; they do not touch accounts,
 sign-in, subscriptions or network services. Provided as-is, without warranty.
 
 ## License

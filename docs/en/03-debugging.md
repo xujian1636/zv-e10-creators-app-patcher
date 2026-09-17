@@ -20,17 +20,23 @@ export JAVA_HOME=/opt/homebrew/opt/openjdk/libexec/openjdk.jdk/Contents/Home   #
 ## Get evidence first
 
 1. **The release build has no logs.** The `common/log/AdbLog` methods print nothing and there is no switch, so the
-   debug build injects tracing ([D1, D2](02-patches.md#debug-build-only)).
-2. **Use wireless adb** — the phone's USB port is taken by the camera. Developer options → Wireless debugging →
-   Pair with pairing code.
-3. **Start logging before plugging in the camera**, and search with `grep -a` (logcat contains stray bytes that make
-   `grep` treat the file as binary):
+   debug build injects tracing ([D1–D3](02-patches.md#debug-build-only)).
+2. **Pick the right adb transport.** For USB tests the phone's USB port is taken by the camera, so use wireless adb
+   (Developer options → Wireless debugging → Pair with pairing code). For Wi-Fi tests do the opposite: keep the adb
+   cable plugged in, so the log keeps flowing while the phone joins the camera's hotspot and leaves your network.
+3. **Start logging before connecting the camera**, take the whole buffer, and search with `grep -a` (logcat contains
+   stray bytes that make `grep` treat the file as binary):
    ```bash
    adb logcat -c && adb logcat -v time > run.log
    grep -a ZVPATCH run.log
    ```
+   Do not filter with `adb logcat -s ZVPATCH`: the filtered stream drops lines under load and makes a working
+   sequence look truncated.
 4. **ColorOS/OxygenOS drop logs** above 300 lines per second per app (`LOGS OVER PROC QUOTA(300) ... DROPPED`); a
    missing line does not prove something did not happen.
+5. **Without the debug build** you can still tell what happened: `adb shell dumpsys usagestats` lists which screen
+   was in the foreground and when, `ls -lt /sdcard/DCIM/CA_IMAGES` shows what arrived, and the system log records
+   Wi-Fi joins (`connectToNetwork "DIRECT-…"`), USB attach/detach and crashes.
 
 ## Useful log lines
 
@@ -41,7 +47,19 @@ export JAVA_HOME=/opt/homebrew/opt/openjdk/libexec/openjdk.jdk/Contents/Home   #
 | `SWITCH function mode` / `TERMINATE` / `DISCONNECT` | Session closed; the stack trace follows |
 | `SessionAlreadyOpen` | The camera still holds the previous session; the app closes it and retries (harmless) |
 | `UsbPermissionActivity` | USB permission dialog shown (possibly for another app) |
+| `DID name=… mediaServer=` | Which Wi-Fi service answered: PC Remote (disabled) or Smartphone Connect (enabled) |
+| `STORAGE ids=` | `[]` nothing to transfer, `[VIRTUAL_MEDIA_1]` images selected on the camera, `[STORAGE_MEDIA_1]` the card |
+| `LV setLiveViewStreamCallback` / `LV frames=` | Live view was started, and frames are arriving |
 | `FATAL EXCEPTION` | Crash |
+
+## Wi-Fi specifics
+
+- The camera must not be in PC Remote mode when you test transfers: it refuses *Send to Smartphone* while PC Remote
+  is on, with *"The operation or setting cannot be performed"* on its screen.
+- The two Wi-Fi services use different hotspots (`DIRECT-…` names differ), and each has its own save-destination
+  settings, so a remote shot can arrive as JPEG only in one mode and RAW+JPEG in the other.
+- A session in remote-control mode cannot receive images. Leaving Remote Shooting reopens it for transfer, which
+  takes about three seconds: close, reopen, re-read storage and object properties.
 
 ## Other apps taking the USB device
 
