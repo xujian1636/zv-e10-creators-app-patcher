@@ -473,7 +473,7 @@ def main():
                 print(f'  [ok] {diagnostic.__name__}')
     except PatchError as exc:
         sys.exit(f'  [failed] {exc}')
-
+                    
 
 if __name__ == '__main__':
     main()
